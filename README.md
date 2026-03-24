@@ -22,6 +22,8 @@ Client → Arbiter → [Capability Filter] → [Thompson Sampling] → Provider 
 
 The bandit learns. Simple requests get routed to cheap fast models. Complex requests get routed to powerful ones. You never overpay. You never underpay.
 
+→ [View full system diagram](docs/diagrams/overview.md)
+
 ---
 
 ## Quick Start
@@ -116,6 +118,8 @@ Every request follows the same path:
 7. **Update** — atomic `HINCRBY` on Redis α/β, full audit log to Postgres
 8. **Return** — response + full decision metadata to client
 
+→ [View core loop diagram](docs/diagrams/core-loop.md)
+
 ### Bandit policy
 
 Arbiter uses Thompson Sampling over a Beta distribution per arm per task type. Arms with more successes accumulate higher α and are sampled higher more often. Exploration happens naturally — no epsilon tuning required.
@@ -125,6 +129,8 @@ Arbiter uses Thompson Sampling over a Beta distribution per arm per task type. A
 **Non-stationarity:** Exponential decay (λ=0.99 per request) prevents old data from dominating as models update silently over time.
 
 **Fallback attribution:** When a fallback occurs, the selected arm is marked `unscored`. Neither the selected nor the fallback arm receives a reward update. Learning data stays clean.
+
+→ [View bandit policy diagram](docs/diagrams/bandit.md)
 
 ### Scoring
 
@@ -142,9 +148,13 @@ Reward is binary success only. Cost and latency are tracked separately and never
 
 **Postgres** holds the durable request log, full decision audit trail, and all cost/latency analytics used for baseline comparisons.
 
+→ [View state management diagram](docs/diagrams/state.md)
+
 ### Fallback and circuit breaker
 
 Each arm defines a timeout threshold, a single retry, and a circuit breaker that suppresses the arm after N consecutive failures. A background health probe runs every 30 seconds per provider — proactively suppressing dead arms before the circuit breaker is needed.
+
+→ [View fallback and circuit breaker diagram](docs/diagrams/fallback.md)
 
 ### Code execution sandbox
 
@@ -159,9 +169,13 @@ On return, containers are sanitized (processes killed, `/tmp` wiped, environment
 
 Pool exhaustion queues requests (max depth: 50). If the queue is full, the API returns `503` with a `Retry-After` header. No silent drops.
 
+→ [View sandbox diagram](docs/diagrams/sandbox.md)
+
 ### Provider abstraction
 
 Each provider has an isolated adapter that normalizes request format, response format, token/cost reporting, error types, and timeout behavior. Provider-specific behavior never leaks into core routing logic.
+
+→ [View provider abstraction diagram](docs/diagrams/providers.md)
 
 ---
 
@@ -199,20 +213,29 @@ Baselines compared: always GPT-4.1, always Gemini Flash, static heuristic router
 
 ```
 arbiter/
+├── docs/
+│   └── diagrams/          # System design diagrams
+│       ├── overview.md
+│       ├── core-loop.md
+│       ├── bandit.md
+│       ├── fallback.md
+│       ├── state.md
+│       ├── sandbox.md
+│       └── providers.md
 ├── src/
-│   ├── api/           # FastAPI routes, schemas, middleware
-│   ├── bandit/        # Thompson Sampling, Beta distributions, decay
-│   ├── providers/     # Adapter per provider
-│   ├── scoring/       # Hard scoring per task type
-│   ├── sandbox/       # Container pool, sanitization, execution
-│   ├── fallback/      # Circuit breaker, retry, health checks
-│   ├── logging/       # Decision audit logging
-│   └── config/        # Versioned arm configs, capability map
+│   ├── api/               # FastAPI routes, schemas, middleware
+│   ├── bandit/            # Thompson Sampling, Beta distributions, decay
+│   ├── providers/         # Adapter per provider
+│   ├── scoring/           # Hard scoring per task type
+│   ├── sandbox/           # Container pool, sanitization, execution
+│   ├── fallback/          # Circuit breaker, retry, health checks
+│   ├── logging/           # Decision audit logging
+│   └── config/            # Versioned arm configs, capability map
 ├── db/
-│   ├── redis/         # Policy stats schema
-│   └── postgres/      # Migrations, request log schema
-├── benchmarks/        # Synthetic traffic datasets per task type
-├── dashboard/         # Analytics dashboard (built after core loop)
+│   ├── redis/             # Policy stats schema
+│   └── postgres/          # Migrations, request log schema
+├── benchmarks/            # Synthetic traffic datasets per task type
+├── dashboard/             # Analytics dashboard (built after core loop)
 ├── Dockerfile
 ├── docker-compose.yml
 └── README.md
